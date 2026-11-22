@@ -75,11 +75,22 @@ for ch in chunks:
 popups = []
 if icons_file:
     import os
-    efont = ImageFont.truetype(os.environ.get('EMOJI_FONT', '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf'), 109)
+    try:
+        efont = ImageFont.truetype(os.environ.get('EMOJI_FONT', '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf'), 109)
+    except OSError:
+        efont = None   # emoji font only needed when a Tabler PNG is missing for an icon name
     for k, ic in enumerate(json.load(open(icons_file))):
-        im = Image.new('RGBA', (136, 128), (0, 0, 0, 0))
-        ImageDraw.Draw(im).text((0, 0), ic['emoji'], font=efont, embedded_color=True)
-        im = im.resize((200, 188), Image.LANCZOS)
+        tp = Path(__file__).resolve().parent.parent / 'assets/icons/tabler' / (str(ic.get('name', '')) + '.png')
+        if tp.exists():      # Tabler Icons (MIT), outline, one brand colour (yellow) so every popup matches
+            a = Image.open(tp).convert('RGBA').split()[3].resize((176, 176), Image.LANCZOS)
+            im = Image.new('RGBA', (200, 188), (0, 0, 0, 0)); col = Image.new('RGBA', (176, 176), (250, 204, 21, 255)); col.putalpha(a)
+            im.alpha_composite(col, (12, 6))
+        else:
+            if efont is None:
+                continue
+            im = Image.new('RGBA', (136, 128), (0, 0, 0, 0))
+            ImageDraw.Draw(im).text((0, 0), ic['emoji'], font=efont, embedded_color=True)
+            im = im.resize((200, 188), Image.LANCZOS)
         bg = Image.new('RGBA', (240, 228), (0, 0, 0, 0))
         ImageDraw.Draw(bg).rounded_rectangle((0, 0, 239, 227), 48, fill=(0, 0, 0, 150))
         bg.alpha_composite(im, (20, 20))

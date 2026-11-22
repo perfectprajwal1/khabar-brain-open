@@ -25,6 +25,8 @@ def main():
     outp = sys.argv[sys.argv.index('--out') + 1] if '--out' in sys.argv else None
     E, W = [], []
     lo = float(sys.argv[sys.argv.index('--min-seconds') + 1]) if '--min-seconds' in sys.argv else 12.0
+    if not Path(reel).exists():
+        print(json.dumps({'pass': False, 'errors': ['file not found: ' + reel]})); sys.exit(2)
     info = json.loads(sh('ffprobe', '-v', 'error', '-show_streams', '-show_format', '-of', 'json', reel))
     vs = [s for s in info['streams'] if s['codec_type'] == 'video']
     au = [s for s in info['streams'] if s['codec_type'] == 'audio']

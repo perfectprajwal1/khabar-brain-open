@@ -193,7 +193,10 @@ jobs:
           else
             FACE=parts/face-clip/lipsync.mp4
           fi
-          python scripts/compose_split.py parts/demo-top/demo_top.mp4 "$FACE" $D/voice.mp3 "-" draft_reel.mp4 --words $D/words.json --icons $D/icons.json
+          python -m pip install --disable-pip-version-check faster-whisper==1.2.1
+          python scripts/align_words.py $D/voice.mp3 $D/words.json $D/words_aligned.json || cp $D/words.json $D/words_aligned.json
+          cat $D/align_report.json >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          python scripts/compose_split.py parts/demo-top/demo_top.mp4 "$FACE" $D/voice.mp3 "-" draft_reel.mp4 --words $D/words_aligned.json --icons $D/icons.json
           python validator/validate_reel.py draft_reel.mp4 --voice $D/voice.mp3 --out reel_validation.json ${{ inputs.brain == 'fixture' && '--min-seconds 3' || '' }}
           ffprobe -v error -show_entries stream=codec_name,width,height,duration -of compact draft_reel.mp4
           ffmpeg -v error -xerror -i draft_reel.mp4 -f null -
