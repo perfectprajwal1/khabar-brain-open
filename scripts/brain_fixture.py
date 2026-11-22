@@ -22,7 +22,7 @@ L = [('के तपाईंको खाता साँच्चै सुर
      ('आजै अन गर्नुहोस्, पाँच मिनेट मात्र लाग्छ।', [], 'encouraging', 'takeaway')]
 lines = [{'n': i + 1, 'text': t, 'claims': c, 'emotion': e, 'role': r} for i, (t, c, e, r) in enumerate(L)]
 hook = {'scores': {'clarity': 2, 'curiosity': 2, 'nepal_relevance': 1, 'payoff': 1, 'speakable': 2}, 'total': 8, 'misleading': False}
-plan = {'popups': [{'n': 1, 'icon': 'lock'}, {'n': 4, 'icon': 'check'}], 'demo': {'url': 'https://en.wikipedia.org/wiki/Special:Search', 'query': entry['demo_query']}, 'voice': 'FIXTURE (voice_test6.mp3)'}
+plan = {'popups': [{'n': 1, 'icon': 'lock'}, {'n': 4, 'icon': 'check'}], 'demo': {'recipe': entry['id']}, 'voice': 'FIXTURE (voice_test6.mp3)'}
 v = validate(research, lines, hook, plan, STYLES, ICONS, pages)
 sv = lambda n, o: (out / n).write_text(json.dumps(o, ensure_ascii=False, indent=2), encoding='utf-8')
 sv('research.json', research); sv('script_humanized.json', {'lines': lines}); sv('hook.json', hook); sv('plan.json', plan); sv('validation.json', v); sv('demo.json', plan['demo'])

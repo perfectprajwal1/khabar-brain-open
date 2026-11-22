@@ -1,0 +1,102 @@
+{
+ "_note": "Per-topic screen demo recipes. Free public pages only, no login. steps: type(sel,text), press(key), wait(ms), zoom(sel,z). mode 'cards' = our own local HTML animation (for topics with no demo-able free web tool).",
+ "passwords": {
+  "mode": "web",
+  "tool": "Bitwarden password strength tester",
+  "url": "https://bitwarden.com/password-strength/",
+  "hide": [
+   "header",
+   "nav",
+   "[class*=cookie]",
+   "[id*=cookie]",
+   "[id*=onetrust]"
+  ],
+  "reject_cookie": "Reject All",
+  "scroll_to": "#password-input",
+  "steps": [
+   {
+    "do": "zoom",
+    "sel": "#password-input",
+    "z": 1.45
+   },
+   {
+    "do": "type",
+    "sel": "#password-input",
+    "text": "password123",
+    "wait": 1800
+   },
+   {
+    "do": "type",
+    "sel": "#password-input",
+    "text": "Blue-Tea-Moon-Train-92!",
+    "wait": 1800
+   }
+  ],
+  "expected": "weak password: Very Weak, crack time under a second; passphrase: Strong, centuries"
+ },
+ "two-step": {
+  "mode": "web",
+  "tool": "TOTP token generator (public demo key)",
+  "url": "https://totp.danhersam.com/",
+  "hide": [],
+  "scroll_to": "body",
+  "steps": [
+   {
+    "do": "zoom",
+    "sel": "text=Updating",
+    "z": 1.5
+   },
+   {
+    "do": "wait",
+    "ms": 6000
+   },
+   {
+    "do": "zoom",
+    "sel": "text=Updating",
+    "z": 1.5
+   },
+   {
+    "do": "wait",
+    "ms": 6000
+   }
+  ],
+  "expected": "a 6-digit code with a countdown bar that changes every 30 seconds"
+ },
+ "phishing": {
+  "mode": "web",
+  "tool": "Google Safe Browsing site status",
+  "url": "https://transparencyreport.google.com/safe-browsing/search",
+  "hide": [],
+  "scroll_to": "body",
+  "steps": [
+   {
+    "do": "type",
+    "sel": "input[type=text]",
+    "text": "testsafebrowsing.appspot.com",
+    "z": 1.3,
+    "dy": 200,
+    "wait": 1500,
+    "enter": true,
+    "after": 4500,
+    "x": 400
+   }
+  ],
+  "expected": "test site shows the unsafe-site warning (Google's own test page)"
+ },
+ "shortcuts": {
+  "mode": "cards",
+  "tool": "own keycap animation (no free web tool shows shortcuts live without a login)",
+  "file": "assets/demo/shortcuts.html",
+  "seconds": 14,
+  "steps": [],
+  "expected": "keycaps Ctrl+C, Ctrl+V, Ctrl+Z, Ctrl+F light up in turn with the action name"
+ },
+ "_fallback": {
+  "mode": "cards",
+  "tool": "topic title card",
+  "file": "assets/demo/shortcuts.html",
+  "seconds": 12,
+  "steps": [],
+  "expected": "generic card, weaker than a real demo"
+ }
+}

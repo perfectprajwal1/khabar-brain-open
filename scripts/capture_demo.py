@@ -3,7 +3,7 @@
 
 Usage: capture_demo.py OUT.mp4 [--url URL] [--query TEXT]
 Output: 1080x960 mp4 (the top panel), 30 fps, silent. Free, no accounts, public page only.
-Flow: open page, click the search box (zoom in), type the query, press Enter, scroll the results.
+Flow (password topic): Bitwarden strength tester, type a weak password then a strong passphrase, zoom on the verdict. Public page, no account.
 """
 import json, subprocess, sys, time, shutil
 from pathlib import Path
@@ -13,8 +13,7 @@ from PIL import Image
 W, H, FPS = 1080, 960, 30
 S = 1.0  # coordinates are already in video pixels; the page itself is enlarged with CSS zoom below
 out = sys.argv[1]
-url = sys.argv[sys.argv.index('--url') + 1] if '--url' in sys.argv else 'https://en.wikipedia.org/wiki/Special:Search'
-query = sys.argv[sys.argv.index('--query') + 1] if '--query' in sys.argv else 'How to learn programming'
+
 work = Path('/tmp/demo_cap'); shutil.rmtree(work, ignore_errors=True); work.mkdir()
 
 CURSOR_JS = """
@@ -23,6 +22,10 @@ CURSOR_JS = """
  document.documentElement.appendChild(d);
  addEventListener('mousemove', e => { d.style.left=e.clientX+'px'; d.style.top=e.clientY+'px'; }, true); })();
 """
+recipes = json.loads((Path(__file__).resolve().parent.parent / 'assets/demo/recipes.json').read_text())
+rid = sys.argv[sys.argv.index('--recipe') + 1] if '--recipe' in sys.argv else 'passwords'
+rec = recipes.get(rid) or recipes['_fallback']
+print('recipe', rid if rid in recipes else '_fallback', rec['tool'])
 events = []  # (t, x, y, zoom)
 with sync_playwright() as p:
     b = p.chromium.launch()
@@ -30,23 +33,38 @@ with sync_playwright() as p:
     page = ctx.new_page(); t0 = time.time()
     now = lambda: time.time() - t0
     page.add_init_script(CURSOR_JS)
-    page.add_init_script("document.addEventListener('DOMContentLoaded',()=>{const s=document.createElement('style');s.textContent='html{zoom:1.7}';document.head.appendChild(s)})")
-    page.goto(url, wait_until='domcontentloaded'); page.wait_for_timeout(1200)
-    box = page.locator('input[type=search]:visible').last
-    bb = box.bounding_box(); cx, cy = bb['x'] + min(bb['width'] / 2, 330), bb['y'] + bb['height'] / 2
-    page.mouse.move(cx - 300, cy + 200); page.wait_for_timeout(300)
-    events.append((now(), cx * S, cy * S, 1.0))
-    page.mouse.move(cx, cy, steps=25); events.append((now(), cx * S, cy * S, 1.5))
-    page.wait_for_timeout(500); page.mouse.click(cx, cy); page.wait_for_timeout(400)
-    page.keyboard.type(query, delay=90); events.append((now(), cx * S, cy * S, 1.5))
-    page.keyboard.press('Enter'); page.wait_for_load_state('domcontentloaded'); page.wait_for_timeout(900)
-    events.append((now(), W / 2, 330, 1.0)); page.wait_for_timeout(500)
-    first = page.locator('.mw-search-result-heading a').first
-    fb = first.bounding_box()
-    if fb:
-        fx, fy = fb['x'] + 160, fb['y'] + fb['height'] / 2
-        page.mouse.move(fx, fy, steps=25); events.append((now(), fx * S, fy * S, 1.4)); page.wait_for_timeout(1200)
-    events.append((now(), W / 2, H / 2, 1.0)); page.wait_for_timeout(700)
+    hide = ','.join(rec.get('hide') or [])
+    if hide:
+        page.add_init_script("document.addEventListener('DOMContentLoaded',()=>{const s=document.createElement('style');s.textContent=%s;document.head.appendChild(s)})" % json.dumps(hide + '{display:none!important}'))
+    if rec['mode'] == 'cards':
+        page.goto((Path(__file__).resolve().parent.parent / rec['file']).as_uri()); page.wait_for_timeout(int(rec.get('seconds', 12)) * 1000)
+    else:
+        page.goto(rec['url'], wait_until='domcontentloaded'); page.wait_for_timeout(2500)
+        if rec.get('reject_cookie'):
+            try: page.get_by_role('button', name=rec['reject_cookie']).click(timeout=2500)
+            except Exception: pass
+        if hide: page.add_style_tag(content=hide + '{display:none!important}')
+        if rec.get('scroll_to') and rec['scroll_to'] != 'body':
+            page.evaluate("document.querySelector(%s).scrollIntoView({block:'center'})" % json.dumps(rec['scroll_to']))
+        page.wait_for_timeout(800)
+        events.append((now(), W / 2, H / 2, 1.0))
+        def center(sel):
+            bb = page.locator(sel).first.bounding_box()
+            return (bb['x'] + bb['width'] / 2, bb['y'] + bb['height'] / 2) if bb else (W / 2, H / 2)
+        for st in rec['steps']:
+            d = st['do']
+            if d == 'zoom':
+                x, y = center(st['sel']); page.mouse.move(x, y, steps=20); events.append((now(), W / 2, y, st.get('z', 1.4))); page.wait_for_timeout(600)
+            elif d == 'wait':
+                page.wait_for_timeout(st['ms'])
+            elif d == 'type':
+                x, y = center(st['sel']); page.mouse.move(x, y, steps=20); page.mouse.click(x, y)
+                events.append((now(), st.get('x', W / 2), y + st.get('dy', 60), st.get('z', 1.45)))
+                page.keyboard.press('Control+A'); page.keyboard.press('Delete')
+                page.keyboard.type(st['text'], delay=70)
+                if st.get('enter'): page.keyboard.press('Enter'); page.wait_for_timeout(st.get('after', 2000))
+                page.wait_for_timeout(st.get('wait', 1500)); events.append((now(), st.get('x', W / 2), y + st.get('dy', 60) + 50, st.get('z', 1.45))); page.wait_for_timeout(700)
+        events.append((now(), W / 2, H / 2, 1.0)); page.wait_for_timeout(500)
     total = now(); ctx.close(); b.close()
 vid = next(work.glob('*.webm'))
 # the recording starts a bit before t0; align by video duration
@@ -65,7 +83,8 @@ def cam(t):
             return xa + (xb - xa) * u, ya + (ya * 0 + (yb - ya)) * u, za + (zb - za) * u
     return keys[-1][1:]
 
-dec = subprocess.Popen(['ffmpeg', '-v', 'error', '-i', str(vid), '-vf', f'fps={FPS},scale={W}:{H}', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], stdout=subprocess.PIPE)
+start = max(0.0, keys[1][0] - 0.1) if rec['mode'] == 'web' and len(keys) > 1 else 0.0
+dec = subprocess.Popen(['ffmpeg', '-v', 'error', '-ss', str(start), '-i', str(vid), '-vf', f'fps={FPS},scale={W}:{H}', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], stdout=subprocess.PIPE)
 enc = subprocess.Popen(['ffmpeg', '-y', '-v', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{W}x{H}', '-r', str(FPS), '-i', '-',
                         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out], stdin=subprocess.PIPE)
 n = 0
@@ -75,7 +94,7 @@ while True:
     if len(buf) < fs:
         break
     t = n / FPS
-    x, y, z = cam(t)
+    x, y, z = cam(t + start)
     cw, ch = W / z, H / z
     x0 = min(max(x - cw / 2, 0), W - cw); y0 = min(max(y - ch / 2, 0), H - ch)
     im = Image.frombytes('RGB', (W, H), buf).resize((W, H), Image.BICUBIC, box=(x0, y0, x0 + cw, y0 + ch))

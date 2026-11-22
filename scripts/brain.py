@@ -18,14 +18,14 @@ HERE = Path(__file__).resolve().parent.parent
 
 
 def _die(t, v, tb):
-    # exit codes: 4 = text provider unavailable (429/5xx), the only case the workflow fails over on. 5 = other Gemini stop (TTS etc). 1 = anything else.
+    # exit codes: 4 = text provider answered 429/5xx, the only case the workflow fails over on. 6 = a request got NO answer (timeout), outcome unknown: no failover, a human decides. 5 = other Gemini stop (TTS etc). 1 = anything else.
     import traceback, os
     traceback.print_exception(t, v, tb)
     try:
         llm.save_log(out / 'llm_log.json')
     except Exception:
         pass
-    os._exit(4 if (issubclass(t, Stop) and llm.TEXT_FAIL[0]) else 5 if issubclass(t, Stop) else 1)
+    os._exit(6 if (issubclass(t, Stop) and llm.UNKNOWN[0] and not llm.TEXT_FAIL[0]) else 4 if (issubclass(t, Stop) and llm.TEXT_FAIL[0]) else 5 if issubclass(t, Stop) else 1)
 
 
 sys.excepthook = _die
@@ -126,8 +126,9 @@ Script lines: {json.dumps([{'n': l['n'], 'text': l['text']} for l in lines], ens
 Reply ONLY JSON: {{"popups":[{{"n":1,"icon":"search"}}]}}"""
 plan, m = llm.run('director', p, temperature=0.3, shape='{"popups":[{"n":1,"icon":""}]}')
 plan['_llm'] = m
-plan['demo'] = {'url': 'https://en.wikipedia.org/wiki/Special:Search', 'query': research.get('demo_query') or research['topic'],
-                'note': 'Only the Wikipedia search-box flow is built so far. Other sites need their own steps.'}
+_rec = json.loads((HERE / 'assets/demo/recipes.json').read_text())
+plan['demo'] = {'recipe': entry['id'] if entry['id'] in _rec else '_fallback', 'tool': _rec.get(entry['id'], _rec['_fallback'])['tool'],
+                'expected': _rec.get(entry['id'], _rec['_fallback'])['expected']}
 plan['voice'] = voice_name
 plan['popups'] = [x for x in plan.get('popups', []) if x.get('icon') in ICONS['icons']][:4]
 save('plan.json', plan)

@@ -23,6 +23,7 @@ REVIEWER = os.environ.get('BRAIN_REVIEWER', 'groq' if WRITER == 'gemini' else 'g
 ROLE_SIDE = {'research': 'writer', 'script': 'writer', 'humanizer': 'writer', 'hook': 'reviewer', 'director': 'reviewer'}
 LOG = []
 TEXT_FAIL = [False]   # set when a text provider answered 429/5xx or did not answer: the only case the workflow may fail over on
+UNKNOWN = [False]     # set when a text request got no answer (timeout, connection): outcome unknown, no automatic replay
 FAILOVER_FROM = os.environ.get('BRAIN_FAILOVER_FROM', '')
 _last = {}
 
@@ -88,8 +89,10 @@ def run(role, prompt, temperature=0.6, shape=''):
     try:
         raw = fn(prompt, temperature)
     except Stop as e:
-        if re.search(r'429|HTTP 5\d\d|request failed', str(e)):
-            TEXT_FAIL[0] = True
+        if re.search(r'429|HTTP 5\d\d', str(e)):
+            TEXT_FAIL[0] = True          # the provider ANSWERED with a refusal: outcome known, failover allowed
+        elif re.search(r'request failed', str(e)):
+            UNKNOWN[0] = True            # timeout / no answer: outcome unknown, never replayed automatically
         raise
     repaired = False
     try:

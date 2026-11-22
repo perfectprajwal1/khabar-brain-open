@@ -1,0 +1,9 @@
+<!doctype html><meta charset=utf-8><body style="margin:0;background:#0f172a;font-family:Arial,sans-serif;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:46px">
+<style>.row{display:flex;align-items:center;gap:22px;opacity:.28;transition:all .4s;font-size:54px}.row.on{opacity:1;transform:scale(1.08)}
+.k{background:#e2e8f0;color:#0f172a;border-radius:16px;padding:14px 30px;font-weight:700;border-bottom:8px solid #94a3b8}.on .k{background:#facc15;border-color:#ca8a04}
+.t{width:330px;font-size:46px}</style>
+<div class=row><span class=k>Ctrl</span>+<span class=k>C</span><span class=t>Copy</span></div>
+<div class=row><span class=k>Ctrl</span>+<span class=k>V</span><span class=t>Paste</span></div>
+<div class=row><span class=k>Ctrl</span>+<span class=k>Z</span><span class=t>Undo</span></div>
+<div class=row><span class=k>Ctrl</span>+<span class=k>F</span><span class=t>Find</span></div>
+<script>const r=[...document.querySelectorAll('.row')];let i=0;setInterval(()=>{r.forEach((e,j)=>e.classList.toggle('on',j==i));i=(i+1)%4},3000)</script>

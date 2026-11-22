@@ -71,13 +71,13 @@ jobs:
           BRAIN_FAILOVER_FROM: gemini
           TOPIC: ${{ inputs.topic }}
         run: |
-          echo "::warning::Gemini was unavailable (429/5xx). Rerunning the whole text sequence on Groq. Nothing from the Gemini attempt is reused."
+          echo "::warning::Gemini answered 429/5xx (a clear refusal, nothing was produced). Rerunning the whole text sequence on Groq. Nothing from the Gemini attempt is reused. The job summary records this failover."
           rm -rf draft
           python scripts/brain.py draft ${TOPIC:+--topic "$TOPIC"}
       - name: Stop on any other failure
         if: ${{ steps.g.outputs.rc != '0' && !(steps.g.outputs.rc == '4' && inputs.writer == 'gemini' && inputs.brain == 'real') }}
         run: |
-          echo "Brain step ended with code ${{ steps.g.outputs.rc }} (2 = validator rejected the draft, 5 = Gemini TTS or other stop, 4 = text provider limit with no failover allowed)."
+          echo "Brain step ended with code ${{ steps.g.outputs.rc }} (2 = validator rejected the draft, 5 = Gemini TTS or other stop, 4 = text provider limit with no failover allowed, 6 = a request got no answer so its outcome is unknown and it was NOT replayed; tell the owner before rerunning)."
           exit 1
       - name: Show draft
         if: always()
@@ -110,13 +110,13 @@ jobs:
           path: draft
       - name: Install
         run: |
-          python -m pip install --disable-pip-version-check playwright pillow
+          python -m pip install --disable-pip-version-check playwright==1.65.2 pillow==12.3.0
           python -m playwright install --with-deps chromium
           if ! command -v ffmpeg >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y ffmpeg; fi
       - name: Capture demo
         run: |
-          Q=$(python -c "import json;print(json.load(open('draft/demo.json'))['query'])")
-          python scripts/capture_demo.py demo_top.mp4 --query "$Q"
+          R=$(python -c "import json;print(json.load(open('draft/demo.json')).get('recipe','_fallback'))")
+          python scripts/capture_demo.py demo_top.mp4 --recipe "$R"
       - uses: actions/upload-artifact@v4
         with:
           name: demo-top
@@ -129,7 +129,7 @@ jobs:
     needs: brain
     if: inputs.face != 'stand_in'
     runs-on: ubuntu-latest
-    timeout-minutes: 100
+    timeout-minutes: 130
     concurrency:
       group: kaggle-lipsync
       cancel-in-progress: false
@@ -144,7 +144,7 @@ jobs:
         with:
           name: draft
           path: draft
-      - run: python -m pip install --disable-pip-version-check kaggle six
+      - run: python -m pip install --disable-pip-version-check kaggle==2.2.5 six
       - name: Lip sync (never starts a second job, never kills the session on timeout)
         id: ls
         env:
@@ -153,7 +153,7 @@ jobs:
           if [ "${{ inputs.face }}" = "collect" ]; then
             python scripts/kaggle_lipsync.py assets/face/photo.jpg draft/voice.mp3 kaggle_out --collect
           else
-            python scripts/kaggle_lipsync.py assets/face/photo.jpg draft/voice.mp3 kaggle_out --max-wait-min 80
+            python scripts/kaggle_lipsync.py assets/face/photo.jpg draft/voice.mp3 kaggle_out --max-wait-min 110
           fi
       - if: steps.ls.outputs.done == 'true'
         uses: actions/upload-artifact@v4
@@ -176,7 +176,7 @@ jobs:
           python-version: '3.11'
       - name: Install
         run: |
-          python -m pip install --disable-pip-version-check pillow
+          python -m pip install --disable-pip-version-check pillow==12.3.0
           sudo apt-get update && sudo apt-get install -y fonts-noto-color-emoji libraqm0
           if ! command -v ffmpeg >/dev/null 2>&1; then sudo apt-get install -y ffmpeg; fi
           fc-list | grep -i emoji | head -2
@@ -194,6 +194,7 @@ jobs:
             FACE=parts/face-clip/lipsync.mp4
           fi
           python scripts/compose_split.py parts/demo-top/demo_top.mp4 "$FACE" $D/voice.mp3 "-" draft_reel.mp4 --words $D/words.json --icons $D/icons.json
+          python validator/validate_reel.py draft_reel.mp4 --voice $D/voice.mp3 --out reel_validation.json ${{ inputs.brain == 'fixture' && '--min-seconds 3' || '' }}
           ffprobe -v error -show_entries stream=codec_name,width,height,duration -of compact draft_reel.mp4
           ffmpeg -v error -xerror -i draft_reel.mp4 -f null -
           {
@@ -210,6 +211,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: draft-reel
-          path: draft_reel.mp4
+          path: |
+            draft_reel.mp4
+            reel_validation.json
           if-no-files-found: error
           retention-days: 7

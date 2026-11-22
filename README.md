@@ -10,4 +10,4 @@ Map
 - `scripts/compose_split.py` the join and captions. `scripts/capture_demo.py` screen capture. `scripts/kaggle_lipsync.py` and `kaggle/` the GPU step.
 - `.github/workflows/` the draft-reel workflow (main), a collect workflow, a demo-panel test.
 
-No project license is assigned yet. All rights reserved until the owner decides. The caption font (Noto Sans Devanagari Bold, SIL OFL) is not included: put it at `assets/fonts/NotoSansDevanagari-Bold.ttf`.
+Licensed under the MIT License (see LICENSE). The caption font (Noto Sans Devanagari Bold, SIL OFL) is not included: put it at `assets/fonts/NotoSansDevanagari-Bold.ttf`.

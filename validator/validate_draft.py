@@ -7,6 +7,8 @@ import re, urllib.request, urllib.error
 from urllib.parse import urlparse
 
 BAD = ['election', 'minister', 'political', 'parliament', 'cricket', 'football', 'match score', 'breaking news', 'चुनाव', 'मन्त्री', 'क्रिकेट', 'फुटबल', 'राजनीति']
+# Exact Latin names that are shown on screen and may appear in a Nepali line. Add only real product or UI names.
+ALLOWED_LATIN = ['Bitwarden', 'Google', 'Gmail', 'Ctrl', 'Wi-Fi', 'WiFi', 'PDF', 'OTP', 'SMS', 'URL', 'PIN', 'Excel', 'Word', 'Docs', 'Sheets', 'Safe Browsing', 'Authenticator']
 UA = {'User-Agent': 'Mozilla/5.0 (khabar-brain validator)'}
 
 
@@ -65,8 +67,11 @@ def validate(research, lines, hook, plan, styles, icons, pages=None):
     if not (30 <= words <= 75):
         E.append(f'script has {words} words, expected about 45 to 55 (30 to 75 allowed)')
     for l in lines:
-        if re.search(r'[A-Za-z]{3,}', l['text']):
-            E.append(f"line {l['n']} contains Latin letters (captions/voice need Devanagari)")
+        stripped = l['text']
+        for term in ALLOWED_LATIN:       # exact product/UI names may stay in Latin; everything else must be Devanagari
+            stripped = re.sub(r'(?<![A-Za-z])' + re.escape(term) + r'(?![A-Za-z])', ' ', stripped)
+        if re.search(r'[A-Za-z]{3,}', stripped):
+            E.append(f"line {l['n']} contains Latin letters outside the allowed product/UI names (captions/voice need Devanagari)")
         if l['emotion'] not in styles:
             E.append(f"line {l['n']}: unknown emotion {l['emotion']}")
         for cid in l['claims']:
