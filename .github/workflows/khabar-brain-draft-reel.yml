@@ -1,0 +1,215 @@
+name: Khabar Brain draft reel
+'on':
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: 'Source-pack topic id or words (two-step, phishing, passwords, shortcuts). Empty = rotate by date.'
+        required: false
+        default: ''
+      brain:
+        description: 'real = Gemini brain (uses free quota). fixture = no Gemini, canned script, tests the plumbing only.'
+        type: choice
+        options: [real, fixture]
+        default: real
+      writer:
+        description: 'Which free brain writes the whole run. gemini is the default. groq ONLY if pk pre-authorized a full-run fallback. Never mixed mid-run.'
+        type: choice
+        options: [gemini, groq]
+        default: gemini
+      reviewer:
+        description: 'other = the hook and icon review uses the other provider (independent). same = same provider (only if the other has no quota, logged as not independent).'
+        type: choice
+        options: [other, same]
+        default: other
+      face:
+        description: 'new_gpu = one Kaggle GPU job. collect = download the already running or finished session. stand_in = still photo, no GPU.'
+        type: choice
+        options: [new_gpu, collect, stand_in]
+        default: new_gpu
+
+# Manual trigger only. No schedule, no posting, no Buffer. Free tiers only, no cards.
+permissions:
+  contents: read
+
+jobs:
+  brain:
+    name: Brain (topic, script, validator, voice)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install ffmpeg
+        run: if ! command -v ffmpeg >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y ffmpeg; fi
+      - name: Run brain (writer as chosen, Gemini by default)
+        id: g
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          BRAIN_WRITER: ${{ inputs.writer }}
+          BRAIN_REVIEWER: ${{ inputs.reviewer == 'same' && inputs.writer || (inputs.writer == 'gemini' && 'groq' || 'gemini') }}
+          TOPIC: ${{ inputs.topic }}
+        run: |
+          set +e
+          if [ "${{ inputs.brain }}" = "fixture" ]; then
+            python scripts/brain_fixture.py draft
+          else
+            python scripts/brain.py draft ${TOPIC:+--topic "$TOPIC"}
+          fi
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Failover, rerun the WHOLE text sequence on Groq (only if Gemini answered 429/5xx)
+        if: ${{ steps.g.outputs.rc == '4' && inputs.writer == 'gemini' && inputs.brain == 'real' }}
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          BRAIN_WRITER: groq
+          BRAIN_REVIEWER: groq
+          BRAIN_FAILOVER_FROM: gemini
+          TOPIC: ${{ inputs.topic }}
+        run: |
+          echo "::warning::Gemini was unavailable (429/5xx). Rerunning the whole text sequence on Groq. Nothing from the Gemini attempt is reused."
+          rm -rf draft
+          python scripts/brain.py draft ${TOPIC:+--topic "$TOPIC"}
+      - name: Stop on any other failure
+        if: ${{ steps.g.outputs.rc != '0' && !(steps.g.outputs.rc == '4' && inputs.writer == 'gemini' && inputs.brain == 'real') }}
+        run: |
+          echo "Brain step ended with code ${{ steps.g.outputs.rc }} (2 = validator rejected the draft, 5 = Gemini TTS or other stop, 4 = text provider limit with no failover allowed)."
+          exit 1
+      - name: Show draft
+        if: always()
+        run: |
+          for f in draft/*.json; do [ -f "$f" ] && echo "== $f" && head -c 1500 "$f" && echo; done || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: draft
+          path: |
+            draft/*.json
+            draft/voice.mp3
+            draft/voice.wav
+          if-no-files-found: ignore
+          retention-days: 7
+
+  demo:
+    name: Top half (screen capture, auto-zoom)
+    needs: brain
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: draft
+          path: draft
+      - name: Install
+        run: |
+          python -m pip install --disable-pip-version-check playwright pillow
+          python -m playwright install --with-deps chromium
+          if ! command -v ffmpeg >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y ffmpeg; fi
+      - name: Capture demo
+        run: |
+          Q=$(python -c "import json;print(json.load(open('draft/demo.json'))['query'])")
+          python scripts/capture_demo.py demo_top.mp4 --query "$Q"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: demo-top
+          path: demo_top.mp4
+          if-no-files-found: error
+          retention-days: 7
+
+  face:
+    name: Face on Kaggle (one GPU job, cancel-safe)
+    needs: brain
+    if: inputs.face != 'stand_in'
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    concurrency:
+      group: kaggle-lipsync
+      cancel-in-progress: false
+    outputs:
+      done: ${{ steps.ls.outputs.done }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: draft
+          path: draft
+      - run: python -m pip install --disable-pip-version-check kaggle six
+      - name: Lip sync (never starts a second job, never kills the session on timeout)
+        id: ls
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          if [ "${{ inputs.face }}" = "collect" ]; then
+            python scripts/kaggle_lipsync.py assets/face/photo.jpg draft/voice.mp3 kaggle_out --collect
+          else
+            python scripts/kaggle_lipsync.py assets/face/photo.jpg draft/voice.mp3 kaggle_out --max-wait-min 80
+          fi
+      - if: steps.ls.outputs.done == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: face-clip
+          path: kaggle_out/lipsync.mp4
+          if-no-files-found: error
+          retention-days: 7
+
+  join:
+    name: Join into the draft reel
+    needs: [brain, demo, face]
+    if: ${{ always() && needs.brain.result == 'success' && needs.demo.result == 'success' && (needs.face.result == 'skipped' || needs.face.outputs.done == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          python -m pip install --disable-pip-version-check pillow
+          sudo apt-get update && sudo apt-get install -y fonts-noto-color-emoji libraqm0
+          if ! command -v ffmpeg >/dev/null 2>&1; then sudo apt-get install -y ffmpeg; fi
+          fc-list | grep -i emoji | head -2
+      - uses: actions/download-artifact@v4
+        with:
+          path: parts
+      - name: Join
+        run: |
+          D=parts/draft
+          if [ "${{ inputs.face }}" = "stand_in" ]; then
+            DUR=$(ffprobe -v error -show_entries format=duration -of csv=p=0 $D/voice.mp3)
+            ffmpeg -y -v error -loop 1 -i assets/face/photo.jpg -t "$DUR" -vf "scale=512:512:force_original_aspect_ratio=increase,crop=512:512,fps=25,format=yuv420p" stand_in_face.mp4
+            FACE=stand_in_face.mp4
+          else
+            FACE=parts/face-clip/lipsync.mp4
+          fi
+          python scripts/compose_split.py parts/demo-top/demo_top.mp4 "$FACE" $D/voice.mp3 "-" draft_reel.mp4 --words $D/words.json --icons $D/icons.json
+          ffprobe -v error -show_entries stream=codec_name,width,height,duration -of compact draft_reel.mp4
+          ffmpeg -v error -xerror -i draft_reel.mp4 -f null -
+          {
+            echo "## Draft reel ready for review (not posted)"
+            echo "brain=${{ inputs.brain }} face=${{ inputs.face }}"
+            python - <<'PY'
+          import json
+          r = json.load(open('parts/draft/research.json')); v = json.load(open('parts/draft/validation.json'))
+          print('Topic:', r['topic']); print('Validator ok:', v['ok'], '| errors:', v['errors'], '| warnings:', v['warnings'])
+          for l in json.load(open('parts/draft/script_humanized.json'))['lines']:
+              print(f"{l['n']}. [{l['emotion']}] {l['text']}")
+          PY
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: draft-reel
+          path: draft_reel.mp4
+          if-no-files-found: error
+          retention-days: 7

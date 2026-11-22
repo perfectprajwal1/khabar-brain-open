@@ -1,0 +1,19 @@
+{"_note": "Topic -> public pages the brain may take claims from. Each topic needs 2 different publishers. Add topics here. The workflow fetches the pages itself and Gemini may only quote them.",
+ "topics": [
+  {"id": "two-step", "topic": "Two-step verification (2FA) protects your accounts", "demo_query": "Multi-factor authentication",
+   "sources": [
+    {"publisher": "Google Account Help", "url": "https://support.google.com/accounts/answer/185839"},
+    {"publisher": "Wikipedia", "url": "https://en.wikipedia.org/api/rest_v1/page/summary/Multi-factor_authentication", "page": "https://en.wikipedia.org/wiki/Multi-factor_authentication"}]},
+  {"id": "phishing", "topic": "How to spot and report a phishing email", "demo_query": "Phishing",
+   "sources": [
+    {"publisher": "Gmail Help", "url": "https://support.google.com/mail/answer/8253"},
+    {"publisher": "Wikipedia", "url": "https://en.wikipedia.org/api/rest_v1/page/summary/Phishing", "page": "https://en.wikipedia.org/wiki/Phishing"}]},
+  {"id": "passwords", "topic": "Strong passwords and password managers", "demo_query": "Password strength",
+   "sources": [
+    {"publisher": "Google Account Help", "url": "https://support.google.com/accounts/answer/32040"},
+    {"publisher": "Wikipedia", "url": "https://en.wikipedia.org/api/rest_v1/page/summary/Password_strength", "page": "https://en.wikipedia.org/wiki/Password_strength"}]},
+  {"id": "shortcuts", "topic": "Keyboard shortcuts that save time in documents and spreadsheets", "demo_query": "Keyboard shortcut",
+   "sources": [
+    {"publisher": "Google Docs Help", "url": "https://support.google.com/docs/answer/179738"},
+    {"publisher": "Microsoft Support", "url": "https://support.microsoft.com/en-us/office/keyboard-shortcuts-in-excel-1798d9d5-842a-42b8-9c99-9b7213f0040f"}]}
+ ]}

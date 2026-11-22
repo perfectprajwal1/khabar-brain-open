@@ -1,0 +1,2 @@
+{"_note": "Popup icons drawn from Noto Color Emoji (SIL OFL 1.1 font, emoji artwork Apache 2.0). Source: https://github.com/googlefonts/noto-emoji . Installed from Ubuntu package fonts-noto-color-emoji in CI. No brand logos.",
+ "icons": {"search":"🔍","lock":"🔒","document":"📄","phone":"📱","clock":"⏰","check":"✅","warning":"⚠️","idea":"💡","email":"📧","rocket":"🚀","laptop":"💻","book":"📚","star":"⭐","target":"🎯","wifi":"📶","folder":"📁","calendar":"📅","chart":"📈","key":"🔑","wand":"✨"}}

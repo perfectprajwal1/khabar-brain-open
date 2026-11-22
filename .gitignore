@@ -1,0 +1,24 @@
+# Local and generated files
+.env
+.env.*
+!.env.example
+secrets/
+*.key
+*.pem
+*.token
+
+node_modules/
+out/
+inbox/
+stories/
+one_call_voice/
+launcher_backups/
+produced.json
+public/story.json
+public/timing.json
+public/voice/
+public/voice_in/
+public/sfx/*.wav
+*.mp4
+*.mkv
+__pycache__/

@@ -1,0 +1,66 @@
+name: Khabar Brain lip-sync collect and join
+'on':
+  workflow_dispatch:
+
+# Fetches the result of the Kaggle session started by the chain test (no push, no new GPU job)
+# and joins it with a fresh demo top panel.
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    name: Download finished Kaggle clip
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      done: ${{ steps.c.outputs.done }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check kaggle six
+      - name: Collect
+        id: c
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: python scripts/kaggle_lipsync.py assets/face/photo.jpg assets/face/voice_test6.mp3 kaggle_out --collect
+      - if: steps.c.outputs.done == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: face-clip
+          path: kaggle_out/lipsync.mp4
+          if-no-files-found: error
+          retention-days: 3
+
+  join:
+    name: Demo top panel and join
+    needs: collect
+    if: needs.collect.outputs.done == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          python -m pip install --disable-pip-version-check playwright pillow
+          python -m playwright install --with-deps chromium
+          if ! command -v ffmpeg >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y ffmpeg; fi
+      - uses: actions/download-artifact@v4
+        with:
+          path: parts
+      - name: Capture demo and join
+        run: |
+          python scripts/capture_demo.py demo_top.mp4
+          python scripts/compose_split.py demo_top.mp4 parts/face-clip/lipsync.mp4 assets/face/voice_test6.mp3 "यो केवल नमुना हो, फेस जोडिएको जाँच" out_split.mp4
+          ffprobe -v error -show_entries stream=codec_name,width,height,duration -of compact out_split.mp4
+          ffmpeg -v error -xerror -i out_split.mp4 -f null -
+      - uses: actions/upload-artifact@v4
+        with:
+          name: split-reel
+          path: out_split.mp4
+          if-no-files-found: error
+          retention-days: 3
